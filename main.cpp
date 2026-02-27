@@ -31,6 +31,10 @@ struct game_state {
     std::vector<command> commands;
 
     std::vector<command> history;
+
+    int numbness = 0;
+
+    bool youWon = false;
 };
 
 struct command {
@@ -44,6 +48,8 @@ struct command {
 #pragma endregion
 
 #pragma region Functions
+
+void SolvePuzzle();
 
 std::string StringToLowerCase(std::string str) {
     std::ranges::transform(str, str.begin(),[](unsigned char c){ return std::tolower(c); });
@@ -80,7 +86,7 @@ void EnterRoom(game_state &state, std::vector<std::string> parameters) {
     }
 
     if (parameters.size() > 1) {
-        std::cout << "Determined to walk into two rooms at the same time you confidently colide with the wall separating them." << std::endl;
+        std::cout << "Determined to walk into two rooms at the same time you confidently collide with the wall separating them." << std::endl;
         return;
     }
 
@@ -90,6 +96,10 @@ void EnterRoom(game_state &state, std::vector<std::string> parameters) {
                 if (room.name == state.rooms[index].name){
                     std::cout << "-----------------------------------------------------------" << std::endl;
                     std::cout << std::format("You entered the {}\n{}.", room.name, room.description) << std::endl;
+
+                    for (int i = 0; i < room.neighboursIndices.size(); ++i) {
+                        std::cout << "This room is connected to the \"" << state.rooms[room.neighboursIndices[i]].name << "\"" << std::endl;
+                    }
 
                     for (const object& obj: room.objects) {
                         std::cout << "\n[" << obj.name << "] " << obj.summary << std::endl;
@@ -103,6 +113,19 @@ void EnterRoom(game_state &state, std::vector<std::string> parameters) {
     }
 
     std::cout << std::format("You haphazardly walk into a few walls trying to access the {} without success.", parameters[0]) << std::endl;
+}
+
+void ViewRoom(game_state &state, std::vector<std::string> parameters) {
+    std::cout << "-----------------------------------------------------------" << std::endl;
+    std::cout << std::format("You are currently in the {}\n{}.", state.currentRoom.name, state.currentRoom.description) << std::endl;
+
+    for (int i = 0; i < state.currentRoom.neighboursIndices.size(); ++i) {
+        std::cout << "This room is connected to the \"" << state.rooms[state.currentRoom.neighboursIndices[i]].name << "\"" << std::endl;
+    }
+
+    for (const object& obj: state.currentRoom.objects) {
+        std::cout << "\n[" << obj.name << "] " << obj.summary << std::endl;
+    }
 }
 
 void Inspect(game_state &state, std::vector<std::string> parameters) {
@@ -208,30 +231,38 @@ void Use(game_state &state, std::vector<std::string> parameters) {
         return;
     }
 
-    object obj = {};
-
-    for (const object& object: state.inventory) {
-        if (StringToLowerCase(object.name) == parameters[0]) {
-            obj = object;
-            break;
+    // unique code for each item that can be consumed
+    for (int i = 0; i < state.inventory.size(); i++) {
+        if (parameters[0] == "puzzle" && StringToLowerCase(state.inventory[i].name) == parameters[0]) {
+            SolvePuzzle();
+            return;
         }
-    }
 
-    if (obj.name.empty()) {
-        for (const object& object: state.currentRoom.objects) {
-            if (StringToLowerCase(object.name) == parameters[0]) {
-                obj = object;
-                break;
+        if (parameters[0] == "matches" && StringToLowerCase(state.inventory[i].name) == parameters[0]) {
+
+            // Check if you have the texla
+            bool hasTexla = false;
+
+            for (object & obj : state.inventory) {
+                if (StringToLowerCase(obj.name) == "texla") {
+                    hasTexla = true;
+                    break;
+                }
             }
+
+            if (!hasTexla) {
+                std::cout << "You are still missing something explosive enough to light on fire..." << std::endl;
+                return;
+            }
+
+            // Check if you are drunk enough to survive the blast
+            if (state.numbness < 3) {
+                std::cout << "Blowing up the Texla so close to yourself seems like a bad idea. If only you could dull your brain somehow..." << std::endl;
+                return;
+            }
+            state.youWon = true;
+            return;
         }
-    }
-
-    if (!obj.name.empty()) {
-        // unique code for each item that can be used
-
-
-
-        return;
     }
 
     std::cout << std::format("You can't use {}, {} isn't even real. Get real!" ,parameters[0], parameters[0]) << std::endl;
@@ -248,29 +279,33 @@ void Consume(game_state &state, std::vector<std::string> parameters) {
         return;
     }
 
-    object obj = {};
+    // unique code for each item that can be consumed
+    for (int i = 0; i < state.inventory.size(); i++) {
+        if (parameters[0] == "helpful_information" && StringToLowerCase(state.inventory[i].name) == parameters[0]) {
+            state.inventory.erase(state.inventory.begin() + i);
 
-    for (const object& object: state.inventory) {
-        if (StringToLowerCase(object.name) == parameters[0]) {
-            obj = object;
-            break;
+            std::cout << "You absolutely ravage the helpful_information with your mouth... Just straight up munching... Literally horking it down... Yummers!" << std::endl;
+
+            return;
         }
-    }
 
-    if (obj.name.empty()) {
-        for (const object& object: state.currentRoom.objects) {
-            if (StringToLowerCase(object.name) == parameters[0]) {
-                obj = object;
-                break;
+        if (StringToLowerCase(parameters[0]) == "whisky" && StringToLowerCase(state.inventory[i].name) == StringToLowerCase(parameters[0])) {
+            state.inventory.erase(state.inventory.begin() + i);
+            state.numbness++;
+
+            switch (state.numbness) {
+                case 1:
+                    std::cout << "You down the entire bottle, felling nauseous and wobbly. But it's not enough..." << std::endl;
+                    break;
+                case 2:
+                    std::cout << "The second bottle goes down easier than the first. That can't be a good sign. You still need one more..." << std::endl;
+                    break;
+                case 3:
+                    std::cout << "Three bottles in, you feel absolutely terribly. But also borderline invincible. You could survive a nuclear bomb at this point..." << std::endl;
+                    break;
             }
+            return;
         }
-    }
-
-    if (!obj.name.empty()) {
-        // unique code for each item that can be consumed
-
-
-        return;
     }
 
     std::cout << std::format("As you bite into {} you realise that {} was just something you imagined and that your teeth are painfully digging into your tongue!" ,parameters[0], parameters[0]) << std::endl;
@@ -297,47 +332,55 @@ void Inventory(game_state &state, std::vector<std::string> parameters) {
     std::cout << "Rummaging through your backpack you find: " << std::endl;
 
     for (int i = 0; i < state.inventory.size(); ++i) {
-        std::cout << std::format("{}.[{}] {}\n",i, state.inventory[i].name, state.inventory[i].summary);
+        std::cout << std::format("{}.\"{}\" {}\n",i, state.inventory[i].name, state.inventory[i].summary);
     }
 }
 
 void Help(game_state &state, std::vector<std::string> parameters) {
-    std::cout << "Added \"helpful information\" to the player." << std::endl;
+    std::cout << "Added \"helpful_information\" to the player." << std::endl;
 
     state.inventory.push_back({"helpful_information", "what???", "This information doesn't actually seem all that helpful. It looks scrumptious though..."});
 }
 
 int GetZeroNeighbour(int array[], int tileIndex) {
-    if (tileIndex < 0 || tileIndex > 15){
+    if (tileIndex < 0 || tileIndex > 9){
         return -1;
     }
 
     if (tileIndex - 1 >= 0 && array[tileIndex - 1] == 0) return tileIndex - 1;
-    if (tileIndex + 1 <= 15 && array[tileIndex + 1] == 0) return tileIndex + 1;
-    if (tileIndex - 5 >= 0 && array[tileIndex - 5] == 0) return tileIndex - 5;
-    if (tileIndex + 5 <= 15 && array[tileIndex + 5] == 0) return tileIndex + 5;
+    if (tileIndex + 1 < 9 && array[tileIndex + 1] == 0) return tileIndex + 1;
+    if (tileIndex - 3 >= 0 && array[tileIndex - 3] == 0) return tileIndex - 3;
+    if (tileIndex + 3 < 9 && array[tileIndex + 3] == 0) return tileIndex + 3;
 
     return -2;
 }
 
 void SolvePuzzle() {
-    int square[16] = {4, 7, 0, 1, 10, 11, 12, 14, 3, 5, 8, 6, 2, 15, 9, 13};
+    int square[9] = {2, 0, 3,
+                     8, 7, 6,
+                     5, 1, 4};
+
+    // int square[9] = {1, 0, 2,
+    //                  3, 4, 5,
+    //                  6, 7, 8};
+
+    const int width = 3;
 
     std::string input;
 
     while (true) {
-        for (int i = 0; i < 16; ++i) {
-            if (i % 4 == 0) {
+        for (int i = 0; i < 9; ++i) {
+            if (i % width == 0) {
                 std::cout << std::endl;
             }
             std::cout << square[i] << " ";
         }
 
-        std::cout << "\nChoose which tile to move by typing it's coordinate example: 3,0" << std::endl;
+        std::cout << "\nChoose which tile to move by typing it's coordinate example: 1,2" << std::endl;
         std::cin >> input;
 
         int x = (input[0] - 48);
-        int y = (input[2] - 48) * 4;
+        int y = (input[2] - 48) * width;
 
         int tileIndex = x + y;
 
@@ -356,27 +399,54 @@ void SolvePuzzle() {
         int tempInt = square[tileIndex];
         square[tileIndex] = square[result];
         square[result] = tempInt;
+
+        bool won = true;
+
+        for (int i = 0; i < 9; ++i) {
+            if (i != square[i]) {
+                won = false;
+                break;
+            }
+        }
+
+        if (won) {
+            std::cout << "Congratulations, you won the sliding puzzle!" << std::endl;
+            return;
+        }
     }
 }
-
-
 
 #pragma endregion
 
 int main() {
-    SolvePuzzle();
+#pragma region Objects
+
+    object puzzle = {"Puzzle", "It looks like a classic sliding puzzle",
+        "You could tried solving it if you're bored. But do you really have time for that?"};
+
+    object texla = {"TeXla", "It looks brand new. You've heard that these cars make for quite effective yet volatile explosives.",
+        "There is a sticker on the back of the truck saying \"I bought this before it got musky\"."};
+
+    object matches = {"Matches", "Just a box of matches, nothing more.",
+        "These might come in handy if you find something explosive to break out of here..."};
+
+    object whisky = {"Whisky", "Sickly sweet yet rough going down.",
+        "You've never even heard of this brand. Might help to dull the senses though..."};
+
+#pragma endregion
 
     std::vector<room> rooms = {
-        room {"kitchen", "The kitchen in dusty and icky.",  {1, 2}},
-        room {"living_room", "There are a lot of living things in the living room.",  {0, 2, 3, 4}},
+        room {"kitchen", "The kitchen in dusty and icky.",  {1, 2}, {whisky}},
+        room {"living_room", "There are a lot of living things in the living room.",  {0, 2, 3, 4}, {matches}},
         room {"bedroom", "The bed is missing, making this bedroom nothing more than a room.",  {0, 1, 5}},
-        room {"bathroom", "The bathroom has a bathtub but no shower. This home was clearly owned by a psychotic killer.",  {1}},
-        room {"garage", "The garage's walls are covered in deep scratchmarks. The owner's must have a big dog... There are even marks in the ceiling.",  {1}, {{"TeXla", "It looks brand new. You'll have to hurry to escape since it could spontaneously explode at any moment.", "There is a sticker on the back of the truck saying \"I bought this before it got musky\"."}}},
-        room {"office", "The office is cramped and smells of mold. But hey, at least they have an office.",  {2}, {{"Puzzle", "It looks like a classic sliding puzzle", "You can't quite make out what the puzzle's image is supposed to be. Maybe if you solved it..."}}},
+        room {"bathroom", "The bathroom has a bathtub but no shower. This home was clearly owned by a psychotic killer.",  {1}, {whisky}},
+        room {"garage", "The garage's walls are covered in deep scratchmarks. The owner's must have a big dog... There are even marks in the ceiling.",  {1}, {texla}},
+        room {"office", "The office is cramped and smells of mold. But hey, at least they have an office.",  {2}, {puzzle, whisky}},
     };
 
     const std::vector<command> commands = {
         command {"enter","enter [room]", "Move into an adjacent room.", EnterRoom},
+        command {"room","room", "View the current room's description.", ViewRoom},
         command {"inspect","inspect [object]", "Display an object's description.", Inspect},
         command {"take","take [world object]", "Add an object to your untrustworthy backpack.", Take},
         command {"drop","drop [inventory object]", "Drop an object on the murky floor.", Drop},
@@ -403,6 +473,9 @@ int main() {
     std::cout << "-----------------------------------------------------------" << std::endl;
     std::cout << "You wake up in the " << state.currentRoom.name << "." << std::endl;
     std::cout << state.currentRoom.description << std::endl;
+    for (int i = 0; i < state.currentRoom.neighboursIndices.size(); ++i) {
+        std::cout << "This room is connected to the \"" << state.rooms[state.currentRoom.neighboursIndices[i]].name << "\"" << std::endl;
+    }
 
     while (true) {
         std::string input;
@@ -428,5 +501,20 @@ int main() {
 
         words.erase(words.begin());
         command.commandFunction(state, words);
+
+        if (state.youWon) {
+            std::cout << "The Texla explodes into a million pieces and taking a large chunk of the house with it.\n"
+                         "Thankfully, due to your intoxicated state, your body is unharmed as the firefighters clear the rubble above you.\n"
+                         "You managed to escape, good job!" << std::endl;
+
+            std::cout << "   __     ______  _    _  __          _______ _   _ _\n"
+                         "   \\ \\   / / __ \\| |  | | \\ \\        / /_   _| \\ | | |\n"
+                         "    \\ \\_/ / |  | | |  | |  \\ \\  /\\  / /  | | |  \\| | |\n"
+                         "     \\   /| |  | | |  | |   \\ \\/  \\/ /   | | | . ` | |\n"
+                         "      | | | |__| | |__| |    \\  /\\  /   _| |_| |\\  |_|\n"
+                         "      |_|  \\____/ \\____/      \\/  \\/   |_____|_| \\_(_)" << std::endl;
+
+            return 0;
+        }
     }
 }
